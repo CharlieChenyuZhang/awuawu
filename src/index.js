@@ -1,12 +1,22 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
 import "@fontsource/press-start-2p";
+import lofiBeatMp3 from "./sounds/lofi-beat.mp3";
+import { Configuration, OpenAIApi } from "openai";
 
 require("./main.css");
+// configure openai
+const configuration = new Configuration({
+  apiKey: "", // FIXME: don't commit this
+});
 
-// Constants.
-const TREX_JUMP_SPEED = 20;
+const openai = new OpenAIApi(configuration);
 
+// FEATURE FLAGS
+let ENABLE_AUTO_JUMP = false;
+let TREX_JUMP_SPEED = 11;
+
+// Constants
 const CACTUS_SPAWN_X = 20;
 const CACTUS_DESTROY_X = -20;
 const CACTUS_MAX_SCALE = 1;
@@ -46,14 +56,204 @@ const cactusGroup = new THREE.Group();
 scene.add(cactusGroup);
 let renderer;
 let camera;
+let textInputElement;
 
 function createInfoElement() {
   infoElement = document.createElement("div");
   infoElement.id = "info";
-  infoElement.innerHTML = "Press any key to start!";
+  infoElement.innerHTML = "Press spacebar to start/jump!";
   document.body.appendChild(infoElement);
 }
 createInfoElement();
+
+async function callAPI(inputText) {
+  // Replace this with your actual API call
+  // const response = await fetch("YOUR_API_ENDPOINT", {
+  //   method: "POST",
+  //   headers: {
+  //     "Content-Type": "application/json",
+  //   },
+  //   body: JSON.stringify({ text: inputText }),
+  // });
+
+  // const data = await response.json();
+  // console.log("API Response:", data);
+  console.log("!!! calling...", inputText);
+  // return "result";
+
+  try {
+    // it saved the previous convo between the AI and bot
+    const completion = await openai.createCompletion({
+      model: "text-davinci-003",
+      prompt: `
+      Act as a teaching assistant. Your task is to analyze student's input
+      and translate it to the following format. 
+      Please note: ENABLE_AUTO_JUMP is a boolean value. TREX_JUMP_SPEED is an int in the interval of 10 and 22.
+      When you can't decide, use the default value. ENABLE_AUTO_JUMP=false,TREX_JUMP_SPEED=10
+  
+      Below is an example
+  
+      Student says: Whenever the dino sees a cactus, it will jump automatically. 
+  
+      Your analysis: 
+      {"ENABLE_AUTO_JUMP": true, "TREX_JUMP_SPEED": 10}
+  
+      Student says: I want the t-rex jumps higher.
+  
+      Your analysis:
+      {"ENABLE_AUTO_JUMP": false, "TREX_JUMP_SPEED": 11}
+
+      """
+      ALWAYS return in the format of "ENABLE_AUTO_JUMP:VALUE,TREX_JUMP_SPEED=VALUE" without any space and any other words.
+      When you can't determine the value, use the default one.
+  
+      """ 
+      Here is the previous stats
+
+      {"ENABLE_AUTO_JUMP": ${ENABLE_AUTO_JUMP}, "TREX_JUMP_SPEED": ${TREX_JUMP_SPEED}}
+
+      """
+  
+      Student says: ${inputText}
+  
+      Your analysis:
+      `,
+      temperature: 0.6,
+      max_tokens: 200,
+    });
+    let what2say;
+    let hasError = true;
+    try {
+      what2say = completion.data.choices[0].text;
+      what2say = JSON.parse(what2say.trim());
+      hasError = false;
+    } catch (error) {
+      // swallow the error, won't crash the program
+      console.log("openai error", error);
+    }
+
+    if (!hasError) {
+      const new_ENABLE_AUTO_JUMP = what2say?.ENABLE_AUTO_JUMP;
+      const new_TREX_JUMP_SPEED = what2say?.TREX_JUMP_SPEED;
+      console.log("new ENABLE_AUTO_JUMP", new_ENABLE_AUTO_JUMP);
+      console.log("new TREX_JUMP_SPEED", new_TREX_JUMP_SPEED);
+
+      if (new_ENABLE_AUTO_JUMP !== ENABLE_AUTO_JUMP) {
+        ENABLE_AUTO_JUMP = new_ENABLE_AUTO_JUMP;
+        const autoJumpLabel = document.getElementById("autoJumpLabel");
+        autoJumpLabel.innerHTML = `Easter egg (see if you can trigger me): ${
+          !ENABLE_AUTO_JUMP ? "not yet" : "congrats! AutoMode enabled!"
+        }`;
+      }
+
+      if (new_TREX_JUMP_SPEED !== TREX_JUMP_SPEED) {
+        TREX_JUMP_SPEED = new_TREX_JUMP_SPEED;
+        document.getElementById(
+          "jumpHeight"
+        ).innerHTML = `T-Rex Jump Height: ${TREX_JUMP_SPEED}`;
+      }
+    }
+
+    // ENABLE_AUTO_JUMP: boolean true / false
+    // JUMP HEIGHT: int from [10,22]
+  } catch (error) {
+    // Consider adjusting the error handling logic for your use case
+    if (error.response) {
+      console.error(error.response.status, error.response.data);
+    } else {
+      console.error(`Error with OpenAI API request: ${error.message}`);
+    }
+  }
+}
+
+function createControlPanel() {
+  const controlPanel = document.createElement("div");
+  controlPanel.id = "control-panel";
+
+  // Checkbox for auto-jump feature
+  // const autoJumpCheckbox = document.createElement("input");
+  // autoJumpCheckbox.type = "checkbox";
+  // autoJumpCheckbox.id = "autoJumpCheckbox";
+  // autoJumpCheckbox.checked = false; // default value
+
+  const autoJumpLabel = document.createElement("div");
+  autoJumpLabel.id = `autoJumpLabel`;
+  autoJumpLabel.innerHTML = `Easter egg (see if you can trigger me): ${
+    !ENABLE_AUTO_JUMP ? "not yet" : "congrats! AutoMode enabled!"
+  }`;
+
+  // Input for T-Rex jump speed
+  // const jumpSpeedInput = document.createElement("input");
+  // jumpSpeedInput.type = "number";
+  // jumpSpeedInput.value = TREX_JUMP_SPEED; // default value
+
+  const jumpSpeedLabel = document.createElement("div");
+  jumpSpeedLabel.id = "jumpHeight";
+  jumpSpeedLabel.htmlFor = "jumpSpeedInput";
+  jumpSpeedLabel.innerHTML = `T-Rex Jump Height: ${TREX_JUMP_SPEED}`;
+
+  // Add them to the control panel
+  // controlPanel.appendChild(autoJumpCheckbox);
+  controlPanel.appendChild(autoJumpLabel);
+  controlPanel.appendChild(document.createElement("br"));
+  controlPanel.appendChild(jumpSpeedLabel);
+
+  document.body.appendChild(controlPanel);
+
+  // music control
+  // Add a line break for separation
+  controlPanel.appendChild(document.createElement("br"));
+
+  // Create a button for toggling music
+  const toggleMusicButton = document.createElement("button");
+  toggleMusicButton.id = "toggleMusicButton";
+  toggleMusicButton.innerHTML = "Music: off";
+
+  // Add the button to the control panel
+  controlPanel.appendChild(toggleMusicButton);
+
+  document.body.appendChild(controlPanel);
+
+  // CALL API
+  // Create a text area for user input
+  const inputTextArea = document.createElement("textarea");
+  inputTextArea.id = "userInputArea";
+  inputTextArea.rows = 4;
+  inputTextArea.cols = 50;
+
+  // Create a button for submitting the user input
+  const submitButton = document.createElement("button");
+  submitButton.id = "openAiButton";
+  submitButton.innerHTML = "Submit";
+
+  // Add event listener for the submit button
+  submitButton.addEventListener("click", async () => {
+    const inputText = document.getElementById("userInputArea").value;
+    await callAPI(inputText);
+  });
+
+  // Append the text area and submit button to the control panel
+  controlPanel.appendChild(document.createElement("br"));
+  controlPanel.appendChild(inputTextArea);
+  controlPanel.appendChild(document.createElement("br"));
+  controlPanel.appendChild(submitButton);
+
+  document.body.appendChild(controlPanel);
+}
+
+createControlPanel();
+
+function createAudioElement() {
+  const audioElement = document.createElement("audio");
+  audioElement.id = "bg-music";
+  audioElement.src = lofiBeatMp3; // Replace with the path to your own audio file
+  audioElement.type = "audio/mp3";
+  audioElement.loop = true; // Enable looping
+
+  document.body.appendChild(audioElement);
+}
+
+createAudioElement();
 
 function createCamera() {
   camera = new THREE.PerspectiveCamera(
@@ -114,8 +314,9 @@ function load3DModels() {
     function (gltf) {
       trex = gltf.scene;
 
-      trex.scale.setScalar(0.5);
-      trex.rotation.y = Math.PI / 2;
+      trex.position.x = 0.4;
+      trex.scale.setScalar(0.2);
+      trex.rotation.y = Math.PI / 3;
 
       scene.add(trex);
 
@@ -223,18 +424,53 @@ function enableShadow(renderer, light) {
 enableShadow(renderer, directionalLight);
 
 function handleInput() {
-  const callback = () => {
+  const callback = (event) => {
     if (isGameOver) {
       restartGame();
       return;
     }
 
-    jump = true;
+    if (event.code === "Space") {
+      jump = true;
+
+      // const bgMusic = document.getElementById("bg-music");
+      // bgMusic.play();
+    }
   };
 
   document.addEventListener("keydown", callback, false);
   renderer.domElement.addEventListener("touchstart", callback);
   renderer.domElement.addEventListener("click", callback);
+
+  // Listen for changes to the auto-jump feature checkbox
+  // document
+  //   .getElementById("autoJumpCheckbox")
+  //   .addEventListener("change", function () {
+  //     window.ENABLE_AUTO_JUMP = this.checked;
+  //   });
+
+  // Listen for changes to the T-Rex jump speed
+  // document
+  //   .getElementById("jumpSpeedInput")
+  //   .addEventListener("input", function () {
+  //     TREX_JUMP_SPEED = parseFloat(this.value);
+  //   });
+
+  // Get the audio element
+  const bgMusic = document.getElementById("bg-music");
+
+  // Listen for button clicks to toggle music
+  document
+    .getElementById("toggleMusicButton")
+    .addEventListener("click", function () {
+      if (bgMusic.paused) {
+        bgMusic.play();
+        toggleMusicButton.innerHTML = "Music: On";
+      } else {
+        bgMusic.pause();
+        toggleMusicButton.innerHTML = "Music: Off";
+      }
+    });
 }
 handleInput();
 
@@ -264,6 +500,10 @@ function gameOver() {
   isGameOver = true;
 
   infoElement.innerHTML = "GAME OVER";
+
+  const bgMusic = document.getElementById("bg-music");
+  bgMusic.pause();
+  bgMusic.currentTime = 0; // Optional: rewind audio for next playback
 }
 
 function restartGame() {
@@ -380,4 +620,28 @@ function update(delta) {
 
   score += delta * SCORE_INCREASE_SPEED;
   infoElement.innerHTML = Math.floor(score).toString().padStart(5, "0");
+
+  // Feature Flags
+  const JUMP_TRIGGER_DISTANCE = 4; // Distance at which T-Rex should jump
+
+  // logic to jump automatically
+  (() => {
+    if (!ENABLE_AUTO_JUMP) {
+      return; // Exit if auto jump is disabled
+    }
+
+    // Check distance to incoming cacti and trigger jump if close enough
+    for (const cactus of cactusGroup.children) {
+      const distanceToTrex = cactus.position.x - trex.position.x;
+
+      const shouldJump =
+        distanceToTrex > 0 && distanceToTrex < JUMP_TRIGGER_DISTANCE;
+
+      // If the cactus is within the trigger distance and the conditions meet, jump!
+      if (shouldJump && trex.position.y === 0) {
+        jump = true;
+        break; // No need to check further cacti
+      }
+    }
+  })();
 }

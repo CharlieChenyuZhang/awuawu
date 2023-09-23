@@ -10,7 +10,7 @@ body {
   position: absolute;
   text-align: center;
   text-shadow: 2px 2px #1f1f1f;
-  top: 5vh;
+  top: 23vh;
   width: 100%;
   z-index: 100;
 }
@@ -33,4 +33,38 @@ body {
 
 #links a:hover {
   color: black;
+}
+
+#textInput {
+  position: absolute;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+}
+
+#control-panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  background-color: rgba(255, 255, 255, 0.8);
+  padding: 10px;
+  z-index: 1000;
+  font-family: "Press Start 2P";
+  font-size: 10px;
+}
+
+#toggleMusicButton {
+  font-family: "Press Start 2P";
+  font-size: 10px;
+  margin: 10px 0;
+}
+
+#openAiButton {
+  font-family: "Press Start 2P";
+  font-size: 10px;
+}
+
+#autoJumpLabel {
+  margin: 10px 0;
 }

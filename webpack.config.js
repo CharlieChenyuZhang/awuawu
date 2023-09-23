@@ -26,6 +26,10 @@ module.exports = {
         test: /\.(woff|woff2|ttf|eot)$/,
         use: "file-loader?name=fonts/[name].[ext]!static",
       },
+      {
+        test: /\.mp3$/,
+        use: "file-loader?name=sounds/[name].[ext]", // Output into a sounds/ directory
+      },
     ],
   },
 };
