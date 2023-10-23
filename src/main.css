@@ -54,6 +54,17 @@ body {
   font-size: 10px;
 }
 
+#control-panel-level {
+  position: absolute;
+  top: 0;
+  right: 0;
+  background-color: rgba(255, 255, 255, 0.8);
+  padding: 10px;
+  z-index: 1000;
+  font-family: "Press Start 2P";
+  font-size: 10px;
+}
+
 #toggleMusicButton {
   font-family: "Press Start 2P";
   font-size: 10px;
@@ -67,4 +78,20 @@ body {
 
 #autoJumpLabel {
   margin: 10px 0;
+}
+
+#openAiButton {
+  font-family: "Press Start 2P";
+  font-size: 10px;
+}
+
+#typewriter-text,
+#typewriter-text-mando {
+  font-family: "Times New Roman", Times, serif;
+  font-size: 15px;
+}
+
+#userInputArea {
+  width: 100%;
+  border: 2px solid black;
 }

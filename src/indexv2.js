@@ -10,66 +10,11 @@ const configuration = new Configuration({
   apiKey: "", // FIXME: don't commit this
 });
 
-let LEVEL = 1;
-let pauseCactus = false;
-let LEVEL2PauseOnce = false;
-
-const LEVEL_1_PROMPT = `
-Act as a teacher and help me analyze the sentence provided by the student.
-If you detect them using the word 'high' or 'higher', say "try again".
-If the overall meaning is not clear that the game character should jump higher, say "try again".
-If the meaning of user's sentence is to jump higher without the usage of word high or higher, simply say "good job", for other meanings, say 'try again'.
-Don't say antying else. Don't give them answers directly.
-
-Below is what the user provided: 
-`;
-
-let cactusHitCount = 0;
-let controlPanelOpen = false;
-const TIMES_BEFORE_HINT = 3;
-
-let showControlPanel = true;
-
-const LEVEL_2_PROMPT = (
-  ENABLE_AUTO_JUMP,
-  TREX_JUMP_SPEED
-) => `Act as a teaching assistant. Your task is to analyze student's input
-and translate it to the following format. 
-Please note: ENABLE_AUTO_JUMP is a boolean value. TREX_JUMP_SPEED is an int in the interval of 10 and 22.
-When you can't decide, use the default value. ENABLE_AUTO_JUMP=false,TREX_JUMP_SPEED=10
-
-Below is an example
-
-Student says: Whenever the dino sees a cactus, it will jump automatically. 
-
-Your analysis: 
-{"ENABLE_AUTO_JUMP": true, "TREX_JUMP_SPEED": 10}
-
-Student says: I want the t-rex jumps higher.
-
-Your analysis:
-{"ENABLE_AUTO_JUMP": false, "TREX_JUMP_SPEED": 11}
-
-"""
-ALWAYS return in the format of "ENABLE_AUTO_JUMP:VALUE,TREX_JUMP_SPEED=VALUE" without any space and any other words.
-When you can't determine the value, use the default one.
-
-""" 
-Here is the previous stats
-
-{"ENABLE_AUTO_JUMP": ${ENABLE_AUTO_JUMP}, "TREX_JUMP_SPEED": ${TREX_JUMP_SPEED}}
-
-"""
-
-Student says: ${inputText}
-
-Your analysis:`;
-
 const openai = new OpenAIApi(configuration);
 
 // FEATURE FLAGS
 let ENABLE_AUTO_JUMP = false;
-let TREX_JUMP_SPEED = 11;
+let TREX_JUMP_SPEED = 18;
 
 // Constants
 const CACTUS_SPAWN_X = 20;
@@ -85,7 +30,7 @@ const PTERODACTYL_SPAWN_X = -5;
 const PTERODACTYL_SPAWN_INTERVAL = 10;
 const PTERODACTYL_SPEED = 2;
 
-let GRAVITY = -50;
+const GRAVITY = -50;
 const FLOOR_SPEED = -10;
 const SKYSPHERE_ROTATE_SPEED = 0.02;
 const SCORE_INCREASE_SPEED = 10;
@@ -122,161 +67,136 @@ function createInfoElement() {
 createInfoElement();
 
 async function callAPI(inputText) {
+  // Replace this with your actual API call
+  // const response = await fetch("YOUR_API_ENDPOINT", {
+  //   method: "POST",
+  //   headers: {
+  //     "Content-Type": "application/json",
+  //   },
+  //   body: JSON.stringify({ text: inputText }),
+  // });
+
+  // const data = await response.json();
+  // console.log("API Response:", data);
   console.log("!!! calling...", inputText);
   // return "result";
 
-  if (LEVEL === 1) {
+  try {
+    // it saved the previous convo between the AI and bot
+    const completion = await openai.createCompletion({
+      model: "text-davinci-003",
+      prompt: `
+      Act as a teaching assistant. Your task is to analyze student's input
+      and translate it to the following format. 
+      Please note: ENABLE_AUTO_JUMP is a boolean value. TREX_JUMP_SPEED is an int in the interval of 10 and 22.
+      When you can't decide, use the default value. ENABLE_AUTO_JUMP=false,TREX_JUMP_SPEED=10
+  
+      Below is an example
+  
+      Student says: Whenever the dino sees a cactus, it will jump automatically. 
+  
+      Your analysis: 
+      {"ENABLE_AUTO_JUMP": true, "TREX_JUMP_SPEED": 10}
+  
+      Student says: I want the t-rex jumps higher.
+  
+      Your analysis:
+      {"ENABLE_AUTO_JUMP": false, "TREX_JUMP_SPEED": 11}
+
+      """
+      ALWAYS return in the format of "ENABLE_AUTO_JUMP:VALUE,TREX_JUMP_SPEED=VALUE" without any space and any other words.
+      When you can't determine the value, use the default one.
+  
+      """ 
+      Here is the previous stats
+
+      {"ENABLE_AUTO_JUMP": ${ENABLE_AUTO_JUMP}, "TREX_JUMP_SPEED": ${TREX_JUMP_SPEED}}
+
+      """
+  
+      Student says: ${inputText}
+  
+      Your analysis:
+      `,
+      temperature: 0.6,
+      max_tokens: 200,
+    });
+    let what2say;
+    let hasError = true;
     try {
-      // it saved the previous convo between the AI and bot
-      const completion = await openai.createCompletion({
-        model: "text-davinci-003",
-        prompt: LEVEL_1_PROMPT + inputText,
-        temperature: 0.6,
-        max_tokens: 200,
-      });
-      let what2say;
-      let hasError = true;
-      try {
-        what2say = completion.data.choices[0].text;
-        // what2say = JSON.parse(what2say.trim());
-        console.log("what2say", what2say);
-        hasError = false;
-
-        // TODO: display try again
-
-        if (what2say.toLowerCase().includes("good job")) {
-          // move to the next level
-          if (true || LEVEL === 1) {
-            console.log("moving to the next level");
-            // from level 1 to level 2, we increase the jump height
-            TREX_JUMP_SPEED = 20;
-            showControlPanel = false;
-
-            // remove the contorlpanel
-            var elementToRemove = document.getElementById("control-panel");
-
-            elementToRemove.parentNode.removeChild(elementToRemove);
-
-            controlPanelOpen = false;
-            // from level 2 to level 3,
-
-            restartGame();
-            LEVEL++;
-            return;
-          }
-        } else {
-          const controlPanel = document.getElementById("control-panel");
-          const errorMessage = document.createElement("div");
-          errorMessage.innerText = "Not quite there yet. Please try again.";
-          errorMessage.style.color = "red";
-
-          controlPanel.append(errorMessage);
-        }
-      } catch (error) {
-        // swallow the error, won't crash the program
-        console.log("openai error", error);
-
-        // TODO: display try again
-      }
-
-      // if (!hasError) {
-      //   const new_ENABLE_AUTO_JUMP = what2say?.ENABLE_AUTO_JUMP;
-      //   const new_TREX_JUMP_SPEED = what2say?.TREX_JUMP_SPEED;
-      //   console.log("new ENABLE_AUTO_JUMP", new_ENABLE_AUTO_JUMP);
-      //   console.log("new TREX_JUMP_SPEED", new_TREX_JUMP_SPEED);
-
-      //   if (new_ENABLE_AUTO_JUMP !== ENABLE_AUTO_JUMP) {
-      //     ENABLE_AUTO_JUMP = new_ENABLE_AUTO_JUMP;
-      //   }
-
-      //   if (new_TREX_JUMP_SPEED !== TREX_JUMP_SPEED) {
-      //     TREX_JUMP_SPEED = new_TREX_JUMP_SPEED;
-      //     // document.getElementById(
-      //     //   "jumpHeight"
-      //     // ).innerHTML = `T-Rex Jump Height: ${TREX_JUMP_SPEED}`;
-      //   }
-      // }
-
-      // ENABLE_AUTO_JUMP: boolean true / false
-      // JUMP HEIGHT: int from [10,22]
+      what2say = completion.data.choices[0].text;
+      what2say = JSON.parse(what2say.trim());
+      hasError = false;
     } catch (error) {
-      // Consider adjusting the error handling logic for your use case
-      if (error.response) {
-        console.error(error.response.status, error.response.data);
-      } else {
-        console.error(`Error with OpenAI API request: ${error.message}`);
+      // swallow the error, won't crash the program
+      console.log("openai error", error);
+    }
+
+    if (!hasError) {
+      const new_ENABLE_AUTO_JUMP = what2say?.ENABLE_AUTO_JUMP;
+      const new_TREX_JUMP_SPEED = what2say?.TREX_JUMP_SPEED;
+      console.log("new ENABLE_AUTO_JUMP", new_ENABLE_AUTO_JUMP);
+      console.log("new TREX_JUMP_SPEED", new_TREX_JUMP_SPEED);
+
+      if (new_ENABLE_AUTO_JUMP !== ENABLE_AUTO_JUMP) {
+        ENABLE_AUTO_JUMP = new_ENABLE_AUTO_JUMP;
+        const autoJumpLabel = document.getElementById("autoJumpLabel");
+        autoJumpLabel.innerHTML = `Easter egg (see if you can trigger me): ${
+          !ENABLE_AUTO_JUMP ? "not yet" : "congrats! AutoMode enabled!"
+        }`;
+      }
+
+      if (new_TREX_JUMP_SPEED !== TREX_JUMP_SPEED) {
+        TREX_JUMP_SPEED = new_TREX_JUMP_SPEED;
+        document.getElementById(
+          "jumpHeight"
+        ).innerHTML = `T-Rex Jump Height: ${TREX_JUMP_SPEED}`;
       }
     }
-  } else if (LEVEL === 2) {
-    // do nothing
-    if (inputText.toLowerCase().includes("decrease")) {
-      // from level 1 to level 2, we increase the jump height
-      GRAVITY = -30;
-      showControlPanel = false;
 
-      // remove the contorlpanel
-      var elementToRemove = document.getElementById("control-panel");
-
-      elementToRemove.parentNode.removeChild(elementToRemove);
-
-      controlPanelOpen = false;
-      // from level 2 to level 3,
-      pauseCactus = false;
-      restartGame();
-      LEVEL++;
-      return;
+    // ENABLE_AUTO_JUMP: boolean true / false
+    // JUMP HEIGHT: int from [10,22]
+  } catch (error) {
+    // Consider adjusting the error handling logic for your use case
+    if (error.response) {
+      console.error(error.response.status, error.response.data);
     } else {
-      // FIXME: show the error message
-      const controlPanel = document.getElementById("control-panel");
-      const errorMessage = document.createElement("div");
-      errorMessage.innerText = "Not quite there yet. Please try again";
-      errorMessage.style.color = "red";
-
-      controlPanel.append(errorMessage);
+      console.error(`Error with OpenAI API request: ${error.message}`);
     }
-  } else {
-    // do nothing
   }
 }
 
-function createControlPanelLevel() {
-  const controlPanelLevel = document.createElement("div");
-  controlPanelLevel.id = "control-panel-level";
-
-  const levelLabel = document.createElement("div");
-  levelLabel.id = "levelLabel";
-  levelLabel.innerHTML = `Level: ${LEVEL}`;
-
-  // Add them to the control panel
-  // controlPanel.appendChild(autoJumpCheckbox);
-  controlPanelLevel.appendChild(levelLabel);
-
-  document.body.appendChild(controlPanelLevel);
-}
-
-createControlPanelLevel();
-
 function createControlPanel() {
-  controlPanelOpen = true;
   const controlPanel = document.createElement("div");
   controlPanel.id = "control-panel";
 
-  // Create a div element for the typewritten text
-  const typewriterText = document.createElement("div");
-  typewriterText.id = "typewriter-text";
-  controlPanel.appendChild(typewriterText);
+  // Checkbox for auto-jump feature
+  // const autoJumpCheckbox = document.createElement("input");
+  // autoJumpCheckbox.type = "checkbox";
+  // autoJumpCheckbox.id = "autoJumpCheckbox";
+  // autoJumpCheckbox.checked = false; // default value
 
-  document.body.appendChild(controlPanel);
+  const autoJumpLabel = document.createElement("div");
+  autoJumpLabel.id = `autoJumpLabel`;
+  autoJumpLabel.innerHTML = `Easter egg (see if you can trigger me): ${
+    !ENABLE_AUTO_JUMP ? "not yet" : "congrats! AutoMode enabled!"
+  }`;
 
-  const typewriterTextMandarin = document.createElement("div");
-  typewriterTextMandarin.id = "typewriter-text-mando";
-  controlPanel.appendChild(typewriterTextMandarin);
+  // Input for T-Rex jump speed
+  // const jumpSpeedInput = document.createElement("input");
+  // jumpSpeedInput.type = "number";
+  // jumpSpeedInput.value = TREX_JUMP_SPEED; // default value
 
-  document.body.appendChild(controlPanel);
+  const jumpSpeedLabel = document.createElement("div");
+  jumpSpeedLabel.id = "jumpHeight";
+  jumpSpeedLabel.htmlFor = "jumpSpeedInput";
+  jumpSpeedLabel.innerHTML = `T-Rex Jump Height: ${TREX_JUMP_SPEED}`;
 
   // Add them to the control panel
+  // controlPanel.appendChild(autoJumpCheckbox);
+  controlPanel.appendChild(autoJumpLabel);
   controlPanel.appendChild(document.createElement("br"));
-  // controlPanel.appendChild(jumpSpeedLabel);
+  controlPanel.appendChild(jumpSpeedLabel);
 
   document.body.appendChild(controlPanel);
 
@@ -284,18 +204,15 @@ function createControlPanel() {
   // Add a line break for separation
   controlPanel.appendChild(document.createElement("br"));
 
-  document.body.appendChild(controlPanel);
+  // Create a button for toggling music
+  const toggleMusicButton = document.createElement("button");
+  toggleMusicButton.id = "toggleMusicButton";
+  toggleMusicButton.innerHTML = "Music: off";
 
-  controlPanel.style.position = "fixed";
-  controlPanel.style.top = "50%";
-  controlPanel.style.left = "50%";
-  controlPanel.style.transform = "translate(-50%, -50%)";
-  controlPanel.style.backgroundColor = "white";
-  controlPanel.style.padding = "20px";
-  controlPanel.style.border = "1px solid #ccc";
-  controlPanel.style.boxShadow = "0 4px 8px rgba(0, 0, 0, 0.2)";
-  controlPanel.style.zIndex = "999"; // Ensure it's on top of other elements
-  // controlPanel.style.height = "60vh";
+  // Add the button to the control panel
+  controlPanel.appendChild(toggleMusicButton);
+
+  document.body.appendChild(controlPanel);
 
   // CALL API
   // Create a text area for user input
@@ -322,36 +239,9 @@ function createControlPanel() {
   controlPanel.appendChild(submitButton);
 
   document.body.appendChild(controlPanel);
-
-  // Text for the typewriting effect
-  const textToType =
-    "As you may have noticed, the T-Rex didn't jump very effectively and collided with the cacti. \
-    Could you form a COMPLETE sentence to advise the T-Rex on how to jump in a way that avoids the cacti? Remember, don’t use the words 'high' or 'higher'. \
-    Consider various expressions to convey this instruction. Please write your response in the text area below.";
-
-  const textToTypeLv2 = `In physics, gravity plays a crucial role in determining how high different creatures, like a T-Rex dinosaur, can jump.
-  Question: If you want the T-Rex to jump higher with the same amount of effort, should we increase or decrease the gravity?`;
-  // TODO: T-Rex, try to leap in a way that allows you to clear the cacti successfully.
-
-  const typewriterDelay = 20; // Adjust typing speed (milliseconds per character) FIXME: after testing, use 20
-  let currentCharacter = 0;
-
-  // Function to simulate typewriting effect
-  function typeNextCharacter(input) {
-    if (currentCharacter < input.length) {
-      typewriterText.textContent += input.charAt(currentCharacter);
-      currentCharacter++;
-      setTimeout(() => typeNextCharacter(input), typewriterDelay);
-    }
-  }
-
-  // Start the typewriting effect
-  if (LEVEL === 1) {
-    typeNextCharacter(textToType);
-  } else if (LEVEL === 2) {
-    typeNextCharacter(textToTypeLv2);
-  }
 }
+
+createControlPanel();
 
 function createAudioElement() {
   const audioElement = document.createElement("audio");
@@ -535,12 +425,12 @@ enableShadow(renderer, directionalLight);
 
 function handleInput() {
   const callback = (event) => {
-    if (event.code === "Space" && !controlPanelOpen) {
-      if (isGameOver) {
-        restartGame();
-        return;
-      }
+    if (isGameOver) {
+      restartGame();
+      return;
+    }
 
+    if (event.code === "Space") {
       jump = true;
 
       // const bgMusic = document.getElementById("bg-music");
@@ -567,20 +457,20 @@ function handleInput() {
   //   });
 
   // Get the audio element
-  // const bgMusic = document.getElementById("bg-music");
+  const bgMusic = document.getElementById("bg-music");
 
   // Listen for button clicks to toggle music
-  // document
-  //   .getElementById("toggleMusicButton")
-  //   .addEventListener("click", function () {
-  //     if (bgMusic.paused) {
-  //       bgMusic.play();
-  //       toggleMusicButton.innerHTML = "Music: On";
-  //     } else {
-  //       bgMusic.pause();
-  //       toggleMusicButton.innerHTML = "Music: Off";
-  //     }
-  //   });
+  document
+    .getElementById("toggleMusicButton")
+    .addEventListener("click", function () {
+      if (bgMusic.paused) {
+        bgMusic.play();
+        toggleMusicButton.innerHTML = "Music: On";
+      } else {
+        bgMusic.pause();
+        toggleMusicButton.innerHTML = "Music: Off";
+      }
+    });
 }
 handleInput();
 
@@ -611,9 +501,9 @@ function gameOver() {
 
   infoElement.innerHTML = "GAME OVER";
 
-  // const bgMusic = document.getElementById("bg-music");
-  // bgMusic.pause();
-  // bgMusic.currentTime = 0; // Optional: rewind audio for next playback
+  const bgMusic = document.getElementById("bg-music");
+  bgMusic.pause();
+  bgMusic.currentTime = 0; // Optional: rewind audio for next playback
 }
 
 function restartGame() {
@@ -669,7 +559,7 @@ function update(delta) {
 
     nextCactusSpawnTime = clock.elapsedTime + interval;
 
-    const numCactus = pauseCactus ? 0 : randomInt(3, 5);
+    const numCactus = randomInt(3, 5);
     for (let i = 0; i < numCactus; i++) {
       const clone = cactus.clone();
       clone.position.x = CACTUS_SPAWN_X + i * 0.5;
@@ -705,29 +595,8 @@ function update(delta) {
     cactusAABB.setFromObject(cactus);
 
     if (cactusAABB.intersectsBox(trexAABB)) {
-      cactusHitCount++;
-      if (cactusHitCount === TIMES_BEFORE_HINT) {
-        cactusHitCount = 0;
-
-        if (showControlPanel) {
-          createControlPanel();
-        }
-      }
       gameOver();
       return;
-    } else {
-      // check the score
-      if (score > 100 && !LEVEL2PauseOnce) {
-        // update the level on the top right corner
-        const levelLabel = document.getElementById("levelLabel");
-        levelLabel.innerHTML = `Level: ${LEVEL}`;
-
-        LEVEL2PauseOnce = true;
-        pauseCactus = true;
-        createControlPanel();
-        cactusGroup.children.length = 0; // remove al lcactus
-        // pase the score
-      }
     }
   }
 

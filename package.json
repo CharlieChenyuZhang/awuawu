@@ -2,7 +2,7 @@
   "name": "awu awu",
   "version": "1.0.0",
   "author": "Charlie Zhang",
-  "main": "index.js",
+  "main": "indexv2.js",
   "license": "MIT",
   "devDependencies": {
     "html-webpack-plugin": "^5.3.1",
