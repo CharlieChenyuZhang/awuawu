@@ -7,7 +7,7 @@ import { Configuration, OpenAIApi } from "openai";
 require("./main.css");
 // configure openai
 const configuration = new Configuration({
-  apiKey: "", // FIXME: don't commit this
+  apiKey: "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", // FIXME: don't commit this
 });
 
 let LEVEL = 1;
